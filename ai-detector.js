@@ -5,14 +5,14 @@
   const BADGE_ATTRIBUTE = "data-x-jev-badge";
   const SCAN_BUTTON_ID = "x-jev-scan-button";
   const TOAST_ID = "x-jev-toast";
-  const STATUS_ID_PATTERN = /\/status\/(\d+)/;
-  // On your own posts, new replies are collected for up to 2 s and sent as one batch.
+  const STATUS_ID_PATTERN = XPageDetect.STATUS_ID_PATTERN;
+  // New content is batched briefly so scrolling a feed does not fire one request per post.
   // Cache lookups cost nothing, so they wait less.
   const AUTO_DELAY = 2000;
   const LOOKUP_DELAY = 500;
   const MAX_AUTO_ATTEMPTS = 2;
 
-  // tweet id -> { probability }. X recycles reply nodes, so badges are re-attached by id.
+  // tweet id -> { probability }. X recycles nodes, so badges are re-attached by id.
   const scores = new Map();
   const lookedUp = new Set();
   const autoAttempts = new Map();
@@ -20,8 +20,12 @@
   let queueTimer = null;
   // Why auto-scan is paused: disabled | limit | needsConfig | error
   let autoPausedReason = null;
+  let lastPathname = location.pathname;
+  // Cached trigger mode from settings; refreshed on storage changes and before auto runs.
+  let triggerMode = "auto";
 
-  const currentMainStatusId = () => location.pathname.match(STATUS_ID_PATTERN)?.[1] || null;
+  const pageKind = () => XPageDetect.classifyXPath(location.pathname);
+  const currentMainStatusId = () => XPageDetect.statusIdFromPath(location.pathname);
 
   function articlePermalink(article) {
     const time = article.querySelector("time");
@@ -67,16 +71,36 @@
   const pathAuthorHandle = () =>
     location.pathname.match(/^\/([A-Za-z0-9_]{1,15})\/status\/\d+/)?.[1]?.toLowerCase() || null;
 
-  // Replies below the main post written by other accounts.
+  // Collect scorable items for the current page.
+  // - status: replies below the main post (other accounts only)
+  // - feed: visible posts in the timeline (skip your own)
   // Each item is { id, text }; the id stays local (cache key), only text is sent to the API.
   function collectPage() {
+    const kind = pageKind();
+    if (kind === "other") return null;
+
+    const ownHandle = loggedInHandle();
+    const articles = [...document.querySelectorAll('article[data-testid="tweet"]')];
+
+    if (kind === "feed") {
+      const items = [];
+      for (const article of articles) {
+        const id = articleStatusId(article);
+        const author = articleAuthorHandle(article);
+        const text = articleText(article);
+        if (!id || !text) continue;
+        if (author && ownHandle && author === ownHandle) continue;
+        items.push({ id, text });
+      }
+      return { kind, items, noun: "post" };
+    }
+
+    // status detail
     const mainId = currentMainStatusId();
     if (!mainId) return null;
-    const articles = [...document.querySelectorAll('article[data-testid="tweet"]')];
     const mainArticle = findMainArticle(articles, mainId);
     if (!mainArticle) return null;
 
-    const ownHandle = loggedInHandle();
     const items = [];
     for (const article of articles) {
       if (article === mainArticle) continue;
@@ -87,8 +111,7 @@
       if (!id || !author || !text || author === ownHandle) continue;
       items.push({ id, text });
     }
-    const mainAuthor = articleAuthorHandle(mainArticle) || pathAuthorHandle();
-    return { items, own: Boolean(ownHandle && mainAuthor === ownHandle) };
+    return { kind, items, noun: "reply" };
   }
 
   function showToast(message, type = "success") {
@@ -161,6 +184,22 @@
     });
   }
 
+  async function refreshTriggerMode() {
+    try {
+      const { settings = {} } = await chrome.storage.local.get("settings");
+      if (settings.triggerMode === "manual" || settings.triggerMode === "auto") {
+        triggerMode = settings.triggerMode;
+      } else if (typeof settings.autoScanOwn === "boolean") {
+        // Legacy installs before triggerMode existed.
+        triggerMode = settings.autoScanOwn ? "auto" : "manual";
+      } else {
+        triggerMode = "auto";
+      }
+    } catch (_error) {
+      triggerMode = "auto";
+    }
+  }
+
   async function analyze(items, mode) {
     busy = true;
     updateScanButton();
@@ -200,14 +239,15 @@
     }
   }
 
-  // New content: auto-scan on your own posts, cache lookup everywhere else.
+  // New content: auto-scan when triggerMode is auto; otherwise cache lookup only.
   function queueCheck() {
     if (queueTimer || busy) return;
     const page = collectPage();
     if (!page) return;
     const unscored = page.items.filter((item) => !scores.has(item.id));
+    const autoEnabled = triggerMode === "auto" && !autoPausedReason;
     const needsAuto =
-      page.own && !autoPausedReason &&
+      autoEnabled &&
       unscored.some((item) => (autoAttempts.get(item.id) || 0) < MAX_AUTO_ATTEMPTS);
     const needsLookup = unscored.some((item) => !lookedUp.has(item.id));
     if (!needsAuto && !needsLookup) return;
@@ -217,19 +257,27 @@
   async function runQueued() {
     queueTimer = null;
     if (busy) return;
+    await refreshTriggerMode();
     const page = collectPage();
     if (!page) return;
     const unscored = page.items.filter((item) => !scores.has(item.id));
-    if (page.own && !autoPausedReason) {
+    if (triggerMode === "auto" && !autoPausedReason) {
       const autoItems = unscored.filter((item) => (autoAttempts.get(item.id) || 0) < MAX_AUTO_ATTEMPTS);
       if (autoItems.length) {
         const response = await analyze(autoItems, "auto");
-        if (!response.ok && autoPausedReason === "error") showToast(`Auto-scan paused: ${response.error}`, "error");
+        if (!response.ok && autoPausedReason === "error") {
+          showToast(`Auto-scan paused: ${response.error}`, "error");
+        }
         return;
       }
     }
     const lookupItems = unscored.filter((item) => !lookedUp.has(item.id));
     if (lookupItems.length) await analyze(lookupItems, "lookup");
+  }
+
+  function pluralNoun(noun, count) {
+    if (count === 1) return noun;
+    return noun === "reply" ? "replies" : `${noun}s`;
   }
 
   async function manualScan() {
@@ -239,12 +287,16 @@
     }
     const page = collectPage();
     if (!page) {
-      showToast("Open a post's detail page to scan its replies", "error");
+      showToast("Open the home feed or a post detail page to scan", "error");
       return { ok: false };
     }
     const unscored = page.items.filter((item) => !scores.has(item.id));
     if (!unscored.length) {
-      showToast(page.items.length ? "All replies on this page are already scored" : "No replies to scan on this page");
+      showToast(
+        page.items.length
+          ? `All ${pluralNoun(page.noun, 2)} on this page are already scored`
+          : `No ${pluralNoun(page.noun, 2)} to scan on this page`
+      );
       return { ok: true };
     }
     const response = await analyze(unscored, "manual");
@@ -255,7 +307,7 @@
     }
     if (autoPausedReason === "error" || autoPausedReason === "needsConfig") autoPausedReason = null;
     const analyzed = response.analyzed ?? response.results.length;
-    let message = `Scored ${analyzed} repl${analyzed === 1 ? "y" : "ies"}`;
+    let message = `Scored ${analyzed} ${pluralNoun(page.noun, analyzed)}`;
     if (response.failed) message += `, ${response.failed} failed`;
     if (response.remaining) message += `. ${response.remaining} left, click again to continue`;
     showToast(message, response.failed ? "error" : "success");
@@ -263,12 +315,13 @@
   }
 
   function scanButtonLabel(page) {
-    if (!page) return "Scan replies";
-    if (!page.own) return busy ? "Scoring…" : "Scan replies";
+    if (!page) return "Scan";
+    const manualLabel = page.kind === "feed" ? "Scan posts" : "Scan replies";
+    if (triggerMode !== "auto") return busy ? "Scoring…" : manualLabel;
     if (busy) return "Auto-scanning…";
     switch (autoPausedReason) {
-      case "limit": return "Daily auto limit reached · Click to scan";
-      case "disabled": return "Auto-scan off · Click to scan";
+      case "limit": return `Daily auto limit reached · Click to scan`;
+      case "disabled": return `Auto-scan off · Click to scan`;
       case "needsConfig": return "API not configured · Open options";
       case "error": return "Auto-scan error · Click to retry";
       default: {
@@ -287,8 +340,9 @@
   }
 
   function installScanButton() {
+    const supported = pageKind() !== "other";
     const existing = document.getElementById(SCAN_BUTTON_ID);
-    if (!currentMainStatusId()) {
+    if (!supported) {
       existing?.remove();
       return;
     }
@@ -314,13 +368,26 @@
     updateScanButton();
   }
 
+  function onPathChange() {
+    if (location.pathname === lastPathname) return;
+    lastPathname = location.pathname;
+    if (queueTimer) {
+      clearTimeout(queueTimer);
+      queueTimer = null;
+    }
+    // Soft reset of per-page auto attempts so a newly opened status/feed can retry.
+    // Keep scores / lookedUp so cached badges still render across SPA navigations.
+    autoAttempts.clear();
+    if (autoPausedReason === "error") autoPausedReason = null;
+  }
+
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type !== "SCAN_REPLIES") return;
     manualScan().then(sendResponse);
     return true;
   });
 
-  // Settings changed (toggle, limit, key): resume auto-scan. Cache/counter writes do not count.
+  // Settings changed (mode, limit, key): resume auto-scan. Cache/counter writes do not count.
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;
     const dataKeys = ["scoreCache", "autoUsage"];
@@ -332,6 +399,10 @@
     if (Object.keys(changes).some((key) => !dataKeys.includes(key))) {
       autoPausedReason = null;
       autoAttempts.clear();
+      refreshTriggerMode().then(() => {
+        updateScanButton();
+        queueCheck();
+      });
     }
   });
 
@@ -341,6 +412,7 @@
     scheduled = true;
     requestAnimationFrame(() => {
       scheduled = false;
+      onPathChange();
       installScanButton();
       renderScoredBadges();
       queueCheck();
@@ -350,5 +422,5 @@
   new MutationObserver(scheduleUpdate).observe(document.documentElement, { childList: true, subtree: true });
   window.addEventListener("popstate", scheduleUpdate);
   setInterval(scheduleUpdate, 1000);
-  scheduleUpdate();
+  refreshTriggerMode().then(scheduleUpdate);
 })();

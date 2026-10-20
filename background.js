@@ -31,8 +31,8 @@ async function configProblem(settings) {
 
 // mode:
 // - lookup: cache only, never calls the API
-// - auto: own-post auto-scan, subject to the toggle and the daily limit
-// - manual: user clicked the scan button, no daily limit
+// - auto: feed/status auto-scan when triggerMode is "auto", subject to the daily limit
+// - manual: user clicked the scan button / toolbar icon, no daily limit
 // items: [{ id, text }] - only `text` is ever sent to the API.
 async function analyzeItems(items, mode) {
   const cache = await loadScoreCache();
@@ -48,7 +48,9 @@ async function analyzeItems(items, mode) {
   let batch = misses.slice(0, settings.maxReplies);
 
   if (mode === "auto") {
-    if (!settings.autoScanOwn) return { ok: true, results: cached, batchIds: [], autoDisabled: true };
+    if (settings.triggerMode !== "auto") {
+      return { ok: true, results: cached, batchIds: [], autoDisabled: true };
+    }
     const remaining = settings.dailyAutoLimit - (await todayAutoCount());
     if (remaining <= 0) return { ok: true, results: cached, batchIds: [], limitReached: true };
     batch = batch.slice(0, remaining);
@@ -130,7 +132,10 @@ chrome.action.onClicked.addListener(async (tab) => {
     try {
       result = await sendMessage(tab.id, { type: "SCAN_REPLIES" });
     } catch (_error) {
-      await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["ai-detector.js"] });
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ["page-detect.js", "reply-cleaner.js", "ai-detector.js"]
+      });
       result = await sendMessage(tab.id, { type: "SCAN_REPLIES" });
     }
     await showBadge(tab.id, result?.ok ? "✓" : "!", result?.ok ? "#1d9bf0" : "#e0245e");

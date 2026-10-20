@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "X Reply Judge (Jev)",
-  "version": "0.1.0",
-  "description": "Shows a TypeSafe Jev AI-text probability on each X reply, with click-only hide/block buttons.",
+  "version": "0.2.0",
+  "description": "Shows a TypeSafe Jev AI-text probability on X feed posts and replies, with auto/manual scan and click-only hide/block buttons.",
   "permissions": [
     "activeTab",
     "scripting",
@@ -23,7 +23,7 @@
     "128": "icons/icon128.png"
   },
   "action": {
-    "default_title": "Scan replies on this page",
+    "default_title": "Scan posts/replies on this page",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png"
@@ -40,6 +40,7 @@
         "https://twitter.com/*"
       ],
       "js": [
+        "page-detect.js",
         "reply-cleaner.js",
         "ai-detector.js"
       ],
