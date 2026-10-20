@@ -19,8 +19,21 @@ async function showBadge(tabId, text, color) {
 }
 
 // Returns a human-readable config problem, or null when ready.
+// Cloudflare errors stay generic: the account id is never included.
 async function configProblem(settings) {
-  if (!settings.apiKey) return "No API key set. Open the options page to add your TypeSafe key.";
+  const cloudflare = settings.protocol === "cloudflare";
+  if (!settings.apiKey) {
+    return cloudflare
+      ? "No API token set. Open the options page to add your Cloudflare API token."
+      : "No API key set. Open the options page to add your TypeSafe key.";
+  }
+  if (cloudflare) {
+    if (!JevApi.normalizeAccountId(settings.accountId)) return "Cloudflare Account ID is required.";
+    if (!(await chrome.permissions.contains({ origins: [JevApi.CF_HOST_PERMISSION] }))) {
+      return "Cloudflare API host is not authorized yet. Save settings in options to grant access.";
+    }
+    return null;
+  }
   const origin = JevApi.originPattern(settings.baseUrl);
   if (!origin) return "API base URL is not a valid http(s) URL.";
   if (origin !== DEFAULT_ORIGIN && !(await chrome.permissions.contains({ origins: [origin] }))) {

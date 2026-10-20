@@ -2,19 +2,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-// Minimal chrome.storage stub + JevApi defaults so store.js can load in Node.
-globalThis.JevApi = {
-  DEFAULT_API_SETTINGS: {
-    baseUrl: "https://api.typesafe.ai",
-    path: "/v1/systemone",
-    authHeader: "Authorization",
-    authScheme: "Bearer",
-    model: "jev-latest",
-    questionKey: "ai_generated",
-    responsePath: "answers.{q}.noul",
-    instructions: "test"
-  }
-};
+// Real api.js defaults, so protocol migration matches production.
+globalThis.JevApi = require("../api.js");
 
 let stored = {};
 globalThis.chrome = {
@@ -72,4 +61,58 @@ test("invalid triggerMode falls back to auto", async () => {
   stored = { settings: { triggerMode: "whenever" } };
   const settings = await loadSettings();
   assert.equal(settings.triggerMode, "auto");
+});
+
+test("empty storage stays on TypeSafe Jev", async () => {
+  stored = {};
+  const settings = await loadSettings();
+  assert.equal(settings.protocol, "typesafe");
+  assert.equal(settings.model, "jev-latest");
+  assert.equal(settings.baseUrl, "https://api.typesafe.ai");
+  assert.equal(settings.path, "/v1/systemone");
+  assert.equal(settings.responsePath, "answers.{q}.noul");
+  assert.equal(settings.cfModel, "clef-flash");
+  assert.equal(settings.accountId, "");
+});
+
+test("old settings without protocol keep Jev and gain Clef defaults", async () => {
+  stored = {
+    settings: {
+      model: "jev-1.13.0",
+      baseUrl: "https://api.typesafe.ai",
+      concurrency: 2,
+      instructions: "custom question"
+    }
+  };
+  const settings = await loadSettings();
+  assert.equal(settings.protocol, "typesafe");
+  assert.equal(settings.model, "jev-1.13.0");
+  assert.equal(settings.baseUrl, "https://api.typesafe.ai");
+  assert.equal(settings.instructions, "custom question");
+  assert.equal(settings.concurrency, 2);
+  assert.equal(settings.cfModel, "clef-flash");
+  assert.equal(settings.accountId, "");
+});
+
+test("unknown protocol falls back to typesafe without touching the Jev model", async () => {
+  stored = { settings: { protocol: "openai", model: "jev-latest" } };
+  const settings = await loadSettings();
+  assert.equal(settings.protocol, "typesafe");
+  assert.equal(settings.model, "jev-latest");
+});
+
+test("explicit cloudflare settings are kept and the model is normalized", async () => {
+  stored = {
+    settings: {
+      protocol: " Cloudflare ",
+      cfModel: " CLEF ",
+      accountId: " test-account \n id ",
+      model: "jev-latest"
+    }
+  };
+  const settings = await loadSettings();
+  assert.equal(settings.protocol, "cloudflare");
+  assert.equal(settings.cfModel, "clef");
+  assert.equal(settings.accountId, "test-accountid");
+  assert.equal(settings.model, "jev-latest");
 });

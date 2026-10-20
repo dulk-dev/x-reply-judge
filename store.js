@@ -26,6 +26,13 @@ async function loadSettings() {
   if (merged.triggerMode !== "auto" && merged.triggerMode !== "manual") {
     merged.triggerMode = DEFAULT_SETTINGS.triggerMode;
   }
+  // Upgrades that predate the backend picker have no protocol. Keep them on TypeSafe Jev.
+  merged.protocol = String(merged.protocol || "").trim().toLowerCase();
+  if (merged.protocol !== "typesafe" && merged.protocol !== "cloudflare") {
+    merged.protocol = "typesafe";
+  }
+  merged.cfModel = JevApi.cloudflareModel(merged.cfModel);
+  merged.accountId = JevApi.normalizeAccountId(merged.accountId);
   return merged;
 }
 
