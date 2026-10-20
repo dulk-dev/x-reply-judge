@@ -52,6 +52,12 @@ test("request contains ONLY the reply text as state", () => {
   assert.deepEqual(Object.keys(body).sort(), ["model", "questions", "state"]);
   assert.equal(body.state, "Great point!");
   assert.equal(body.questions.ai_generated.type, "noul");
+  assert.equal(body.questions.ai_generated.instructions, api.DEFAULT_API_SETTINGS.instructions);
+  assert.deepEqual(body.questions.ai_generated.criteria, {
+    true: api.DEFAULT_API_SETTINGS.criteriaTrue,
+    false: api.DEFAULT_API_SETTINGS.criteriaFalse
+  });
+  assert.equal(body.state.includes("原帖"), false);
   assert.equal(api.buildUrl(cfg), "https://api.typesafe.ai/v1/systemone");
   assert.deepEqual(api.buildHeaders("k", cfg), { "Content-Type": "application/json", Authorization: "Bearer k" });
   assert.deepEqual(api.buildHeaders("k", { ...cfg, authHeader: "X-Api-Key", authScheme: "" }), {
@@ -142,6 +148,41 @@ function assertNoSecrets(message) {
   assert.equal(message.includes(encodeURIComponent(ACCOUNT)), false);
 }
 
+test("custom question text overrides the default criteria", () => {
+  const custom = {
+    ...cfg,
+    instructions: "完全是另一句问法？",
+    criteriaTrue: "像模板",
+    criteriaFalse: "像闲聊"
+  };
+  for (const protocol of ["typesafe", "cloudflare"]) {
+    const body = api.buildRequestBody("只是回复正文", { ...custom, protocol });
+    assert.equal(body.state, "只是回复正文");
+    assert.equal(body.questions.ai_generated.instructions, "完全是另一句问法？");
+    assert.deepEqual(body.questions.ai_generated.criteria, { true: "像模板", false: "像闲聊" });
+  }
+});
+
+test("blank question fields fall back to the default criteria", () => {
+  const body = api.buildRequestBody("hi", {
+    ...cfg,
+    instructions: "  ",
+    criteriaTrue: "",
+    criteriaFalse: "\n"
+  });
+  assert.equal(body.questions.ai_generated.instructions, api.DEFAULT_API_SETTINGS.instructions);
+  assert.deepEqual(body.questions.ai_generated.criteria, {
+    true: api.DEFAULT_API_SETTINGS.criteriaTrue,
+    false: api.DEFAULT_API_SETTINGS.criteriaFalse
+  });
+});
+
+test("the previous English default is not sent", () => {
+  const body = api.buildRequestBody("hi", { ...cfg, instructions: api.LEGACY_DEFAULT_INSTRUCTIONS });
+  assert.equal(body.questions.ai_generated.instructions, api.DEFAULT_API_SETTINGS.instructions);
+  assert.equal(body.questions.ai_generated.instructions.includes("language model"), false);
+});
+
 test("defaults stay on TypeSafe Jev", () => {
   assert.equal(api.DEFAULT_API_SETTINGS.protocol, "typesafe");
   assert.equal(api.DEFAULT_API_SETTINGS.model, "jev-latest");
@@ -207,6 +248,10 @@ test("Cloudflare request uses clef model, Bearer auth, and the run URL", () => {
   assert.equal(body.model, "clef");
   assert.equal(body.state, "Great point!");
   assert.equal(body.questions.ai_generated.type, "noul");
+  assert.deepEqual(body.questions.ai_generated.criteria, {
+    true: api.DEFAULT_API_SETTINGS.criteriaTrue,
+    false: api.DEFAULT_API_SETTINGS.criteriaFalse
+  });
   assert.deepEqual(api.buildHeaders(TOKEN, { ...cfCfg, authHeader: "X-Api-Key", authScheme: "" }), {
     "Content-Type": "application/json",
     Authorization: `Bearer ${TOKEN}`

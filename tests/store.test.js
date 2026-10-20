@@ -101,6 +101,35 @@ test("unknown protocol falls back to typesafe without touching the Jev model", a
   assert.equal(settings.model, "jev-latest");
 });
 
+test("saved copy of the old English default upgrades to the criteria question", async () => {
+  stored = {
+    settings: {
+      instructions: JevApi.LEGACY_DEFAULT_INSTRUCTIONS,
+      model: "jev-1.13.0"
+    }
+  };
+  const settings = await loadSettings();
+  assert.equal(settings.instructions, JevApi.DEFAULT_API_SETTINGS.instructions);
+  assert.equal(settings.criteriaTrue, JevApi.DEFAULT_API_SETTINGS.criteriaTrue);
+  assert.equal(settings.criteriaFalse, JevApi.DEFAULT_API_SETTINGS.criteriaFalse);
+  assert.equal(settings.model, "jev-1.13.0");
+  assert.equal(settings.instructions.includes("language model"), false);
+});
+
+test("a custom question is kept and blank criteria use the defaults", async () => {
+  stored = {
+    settings: {
+      instructions: "  我自己的问法  ",
+      criteriaTrue: " ",
+      criteriaFalse: "自己的否"
+    }
+  };
+  const settings = await loadSettings();
+  assert.equal(settings.instructions, "我自己的问法");
+  assert.equal(settings.criteriaTrue, JevApi.DEFAULT_API_SETTINGS.criteriaTrue);
+  assert.equal(settings.criteriaFalse, "自己的否");
+});
+
 test("explicit cloudflare settings are kept and the model is normalized", async () => {
   stored = {
     settings: {

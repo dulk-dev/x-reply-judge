@@ -1,4 +1,4 @@
-const API_FIELDS = ["baseUrl", "path", "authHeader", "authScheme", "model", "questionKey", "responsePath", "instructions"];
+const API_FIELDS = ["baseUrl", "path", "authHeader", "authScheme", "model", "questionKey", "responsePath", "instructions", "criteriaTrue", "criteriaFalse"];
 const NUMBER_FIELDS = ["concurrency", "maxReplies", "dailyAutoLimit"];
 const DEFAULT_ORIGIN = "https://api.typesafe.ai/*";
 const $ = (id) => document.getElementById(id);

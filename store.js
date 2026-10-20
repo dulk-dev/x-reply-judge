@@ -33,6 +33,10 @@ async function loadSettings() {
   }
   merged.cfModel = JevApi.cloudflareModel(merged.cfModel);
   merged.accountId = JevApi.normalizeAccountId(merged.accountId);
+  // The old English default counts as unset, so upgrades pick up the criteria-backed question.
+  merged.instructions = JevApi.resolveInstructions(merged.instructions);
+  merged.criteriaTrue = String(merged.criteriaTrue || "").trim() || DEFAULT_SETTINGS.criteriaTrue;
+  merged.criteriaFalse = String(merged.criteriaFalse || "").trim() || DEFAULT_SETTINGS.criteriaFalse;
   return merged;
 }
 

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "X Reply Judge",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Shows an AI-text probability on X feed posts and replies, with auto/manual scan and click-only hide/block buttons.",
   "permissions": [
     "activeTab",
