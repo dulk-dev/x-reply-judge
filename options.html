@@ -18,12 +18,15 @@
     #status { margin-top: 12px; white-space: pre-wrap; }
     .ok { color: #00873c; } .err { color: #e0245e; }
     details { margin-top: 12px; }
+    #multiSignalList { margin: 8px 0 0; padding-left: 18px; }
+    #multiSignalList li { margin-top: 12px; }
+    #multiSignalList li div { font-weight: 400; color: #536471; }
     [hidden] { display: none !important; }
   </style>
 </head>
 <body>
   <h1>X Reply Judge</h1>
-  <p class="note">Shows an AI-text probability on feed posts and replies. Only the post or reply text is sent to the selected backend.</p>
+  <p class="note">Shows an AI-text score on feed posts and replies. On a post page the main post is sent with each reply as <code>原帖</code> / <code>回复</code>. Feed posts send that post’s text only. No author or tweet id is sent.</p>
 
   <label for="protocol">Backend</label>
   <select id="protocol">
@@ -47,8 +50,15 @@
       <option value="clef-flash">clef-flash (faster, lower cost)</option>
       <option value="clef">clef</option>
     </select>
-    <small>clef-flash is the 9B model and the default. clef is the 27B model. Both answer the same question.</small>
+    <small>clef-flash is the 9B model and the default. clef is the 27B model. Both answer the same questions.</small>
   </div>
+
+  <label for="judgeMode">判定方式</label>
+  <select id="judgeMode">
+    <option value="multi">Multi-signal (default)</option>
+    <option value="single">Single question (previous mode)</option>
+  </select>
+  <small>Multi asks 13 fixed questions in one request and combines them. Single asks the one question under Advanced. A signal at 50% or more is listed in the badge tooltip.</small>
 
   <h2>Scanning</h2>
   <label>Trigger mode</label>
@@ -81,15 +91,21 @@
       <input id="responsePath" type="text">
       <button id="reset" class="secondary" type="button">Reset endpoint defaults</button>
     </div>
-    <label for="questionKey">Question key</label>
-    <input id="questionKey" type="text">
-    <label for="instructions">Question instructions</label>
-    <textarea id="instructions"></textarea>
-    <label for="criteriaTrue">Criteria for yes (true)</label>
-    <textarea id="criteriaTrue"></textarea>
-    <label for="criteriaFalse">Criteria for no (false)</label>
-    <textarea id="criteriaFalse"></textarea>
-    <small>Sent with both backends. Leave any box blank to keep its default. The default rubric targets Chinese “营业式” replies and can misread other styles. Only the reply text is sent, not the parent post.</small>
+    <div id="singleQuestion">
+      <label for="questionKey">Question key</label>
+      <input id="questionKey" type="text">
+      <label for="instructions">Question instructions</label>
+      <textarea id="instructions"></textarea>
+      <label for="criteriaTrue">Criteria for yes (true)</label>
+      <textarea id="criteriaTrue"></textarea>
+      <label for="criteriaFalse">Criteria for no (false)</label>
+      <textarea id="criteriaFalse"></textarea>
+      <small>Single mode only. Sent with both backends. Leave any box blank to keep its default. The default rubric targets Chinese “营业式” replies, including commentary that sets a verdict, unpacks it, then adds an outlook. It can misread other styles.</small>
+    </div>
+    <div id="multiSignals">
+      <p class="note">Multi-signal mode sends these questions in one request. The list is the same constant the request uses. Weights: positive means an AI signal, negative means a human trait. Score = clamp(sum of weight × probability, 0, 100). Colors: gray 0–19, orange 20–44, red 45 or more.</p>
+      <ul id="multiSignalList"></ul>
+    </div>
   </details>
 
   <button id="save" type="button">Save</button>

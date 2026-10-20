@@ -3,7 +3,8 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const api = require("../api.js");
 
-const cfg = { ...api.DEFAULT_API_SETTINGS };
+// These cases lock the previous one-question wire format. Multi-signal coverage is in signals.test.js.
+const cfg = { ...api.DEFAULT_API_SETTINGS, judgeMode: "single" };
 
 function mockResponse(status, body, headers = {}) {
   return {
@@ -118,6 +119,7 @@ const ACCOUNT = "acctTEST000000000000000000000099";
 const TOKEN = "cfTESTToken000000000000000099";
 const cfCfg = {
   ...api.DEFAULT_API_SETTINGS,
+  judgeMode: "single",
   protocol: "cloudflare",
   accountId: ACCOUNT,
   cfModel: "clef-flash"
@@ -183,8 +185,9 @@ test("the previous English default is not sent", () => {
   assert.equal(body.questions.ai_generated.instructions.includes("language model"), false);
 });
 
-test("defaults stay on TypeSafe Jev", () => {
+test("defaults stay on TypeSafe Jev and multi-signal judging", () => {
   assert.equal(api.DEFAULT_API_SETTINGS.protocol, "typesafe");
+  assert.equal(api.DEFAULT_API_SETTINGS.judgeMode, "multi");
   assert.equal(api.DEFAULT_API_SETTINGS.model, "jev-latest");
   assert.equal(api.DEFAULT_API_SETTINGS.baseUrl, "https://api.typesafe.ai");
   assert.equal(api.DEFAULT_API_SETTINGS.path, "/v1/systemone");

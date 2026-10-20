@@ -2,12 +2,12 @@
 
 [简体中文](README.zh-CN.md)
 
-Chrome MV3 extension that adds one small badge to each post or reply on X (Twitter): `AI 87%`,
-the probability that the text was AI-written. Colors: **>= 70 red**, **>= 31 orange**, otherwise gray.
-No reasons, no signal lists.
+Chrome MV3 extension that adds one small badge to each post or reply on X (Twitter): `AI 87%`.
+Colors: **≥ 45 red**, **20–44 orange**, **0–19 gray**. Hover the badge for the signals that fired.
 
 The default backend is TypeSafe **Jev**. An optional backend calls Cloudflare Workers AI **Clef** or **Clef-flash**.
-Both are decision models: this extension asks one yes/no question and shows the returned probability.
+Both are decision models. The default judge mode sends 13 yes/no questions in one request and combines them.
+Single-question mode is still available.
 
 Also adds **Mute** / **Block** buttons on each reply (post detail / notifications). They act **only when you click them**.
 
@@ -56,10 +56,12 @@ Manual scan always works in both modes.
 
 ### Pipeline
 
-- `state` sent to the API = **the text only**. No author, tweet id, timestamps or the original post.
-  The tweet id is used only locally as the cache key.
+- On a post page, `state` is `原帖：` plus the main post, a blank line, then `回复：` plus the reply.
+  A feed post, or a reply whose main post has no text, sends that text alone.
+  No author, tweet id, or timestamps.
 - One request per item, at most N in flight (default 4), at most M items per scan (default 30).
-- Results are cached in `chrome.storage.local` per tweet id for 7 days.
+- Results are cached in `chrome.storage.local` for 7 days. The key is
+  `v3:<m|s>:<p|r>:<tweet id>`: `m`/`s` is multi or single mode, `p`/`r` is whether parent text was included.
 - On pages where auto is off or paused, already-cached scores are shown without calling the API.
 
 Badges, Mute/Block, scanning, caching, and page detection are the same for both backends.
@@ -75,14 +77,15 @@ Options → **Backend**. Existing installs stay on TypeSafe Jev. The key or toke
 2. Extension options → Backend **TypeSafe Jev** → paste the key → **Save** → **Test connection**.
 
 The default request is `POST https://api.typesafe.ai/v1/systemone` with `Authorization: Bearer <key>`
-and `{ model: "jev-latest", state, questions: { ai_generated: { type: "noul", instructions, criteria } } }`.
-`criteria` is `{ true, false }`, both strings. TypeSafe documents that shape as an optional
-[noul criteria](https://docs.typesafe.ai/primitives/noul.md) object, so Jev receives the same question
-as Clef. The score is `answers.<key>.noul`.
+and `{ model: "jev-latest", state, questions }`. Each question is
+`{ type: "noul", instructions, criteria }`. `criteria` is `{ true, false }`, both strings.
+TypeSafe documents that shape as an optional
+[noul criteria](https://docs.typesafe.ai/primitives/noul.md) object, so Jev receives the same questions
+as Clef. A noul value is `answers.<key>.noul`.
 
-**Advanced** can change the base URL, path, auth header, model name, question key, response path,
-and the question text. A host other than `api.typesafe.ai` asks for an optional host permission
-when you click **Test connection**. There is no separate Account ID.
+**Advanced** can change the base URL, path, auth header, model name, and response path.
+In single mode it can also change the one question. A host other than `api.typesafe.ai` asks for an
+optional host permission when you click **Test connection**. There is no separate Account ID.
 
 ### Cloudflare Workers AI (Clef)
 
@@ -108,7 +111,7 @@ Request (no custom base URL, path, or auth scheme):
 
 - Header: `Authorization: Bearer <token>`, `Content-Type: application/json`
 - Body, same shape as Jev: `{ model, state, questions }`. `model` is `clef` or `clef-flash`, never `jev-latest`.
-- Score: `result.answers.<key>.noul` (a bare `answers.<key>.noul` is also accepted).
+- Each noul value: `result.answers.<key>.noul` (a bare `answers.<key>.noul` is also accepted).
 
 The Account ID and token are not written into extension error text. A failure shows the HTTP status
 plus `errors[0].message` and `errors[0].code` only. HTTP 200 with `"success": false` is a failure.
@@ -116,9 +119,10 @@ plus `errors[0].message` and `errors[0].code` only. HTTP 200 with `"success": fa
 `retry-after` header is present it is still honored.
 
 Base URL, path, auth header, auth scheme, the Jev model name, and the response-path field are hidden
-for this backend. The question key, instructions, and yes/no criteria stay editable and are sent to both backends.
-Leave a box blank to keep that field’s default. A saved copy of the previous English question, with no
-criteria, is treated as untouched and upgraded.
+for this backend. In single mode the question key, instructions, and yes/no criteria stay editable and
+are sent to both backends. Leave a box blank to keep that field’s default. A saved copy of the previous
+English question, or of the 0.3.1 criteria, is treated as untouched and upgraded. Multi mode does not
+use those boxes; Advanced shows the 13 questions instead, so the section is not empty.
 
 ### clef and clef-flash
 
@@ -140,29 +144,56 @@ Output tokens are not charged. Prices were read from the Cloudflare model pages 
 
 A yes/no question with no rubric barely moved on obvious AI replies. Three Chinese replies that read
 as generated “营业式” comments scored **6%**, **11%**, and **13%** in the extension. Replaying the
-same English question on Clef, without criteria, stayed in the **5–16%** range.
-
-The default is now a Chinese noul question plus `criteria.true` / `criteria.false` describing that
-营业式 pattern (restating the post, tidy structure, a generic “it would be better if…”) versus a
-reply that sounds typed by a person. On Clef, those same three replies scored **83–94%**. Three
+same English question on Clef, without criteria, stayed in the **5–16%** range. On Clef, with the
+narrower 0.3.1 criteria and no parent text, those same three replies scored **83–94%**. Three
 human-sounding controls scored **2–39%**.
 
-That is **six replies**, an example, not a benchmark. The rubric is tuned for **Chinese 营业式
-replies** and can misread other writing: a careful human reply, a short agreement, or a translation.
-The wording is this project's choice. `state` is still only the reply. The rubric mentions “the
-original post” as a style clue; the parent post is not sent, so the model cannot actually compare
-the two.
+Single mode still asks one Chinese noul question, now with a broader rubric: restating the post,
+polished sentences, the “verdict, then unpack, then outlook” shape, a neutral commentator voice,
+versus a short reaction, a personal detail, a direct correction, or messy typing. The six scores
+above were measured with the narrower 0.3.1 rubric, on Clef, before parent text was included.
+They are an example, not a benchmark, and they are not the multi-signal score.
+
+The rubric is tuned for **Chinese 营业式 replies** and can misread other writing: a careful human
+reply, a short agreement, or a translation. The wording is this project's choice.
+
+## Multi-signal judge
+
+Options → **判定方式**. **Multi-signal** is the default. **Single question** is the previous mode.
+
+Multi mode sends 13 noul questions in one request. Nine are AI signals and four are human traits.
+The score is `clamp(Σ weight × probability, 0, 100)`, where probability is that question’s noul
+(0–1):
+
+| Signals | Weight |
+| --- | --- |
+| r1 | +35 |
+| r2, r9 | +30 each |
+| r3–r7 | +15 each |
+| r8 | +7 |
+| h1 | −30 |
+| h3 | −25 |
+| h4 | −20 |
+| h2 | −15 |
+
+Colors are gray **0–19**, orange **20–44**, red **≥ 45**. The badge tooltip lists signals whose
+yes-probability is at least 50%, with the rounded contribution. If any of the 13 answers is missing,
+that item gets no score and is not cached.
+
+The questions are fixed. Advanced shows them read-only (key, instructions, yes/no criteria, weight,
+AI or human) from the same constant the request uses. Switching back to single mode shows the
+editable question again.
 
 ## Privacy
 
-- The request body contains the post or reply **text** and the question. It does not contain the author,
-  tweet id, timestamps, or the parent post.
+- The request body contains the post or reply **text**, the parent post text when the main post is
+  on the page, and the questions. It does not contain the author, tweet id, or timestamps.
 - The API key or Cloudflare token stays in `chrome.storage.local` on this device. It is not synced and
   is not sent anywhere except the selected API, in the `Authorization` header.
 - TypeSafe requests go to the configured host, `https://api.typesafe.ai` unless you change **Advanced**.
 - Cloudflare requests go only to `https://api.cloudflare.com`. The Account ID is a path segment on that
   host (`/accounts/{id}/ai/run/...`). It is not copied into logs or error text.
-- Scores are cached locally for 7 days, keyed by tweet id.
+- Scores are cached locally for 7 days under `v3:<m|s>:<p|r>:<tweet id>`.
 
 ## Permissions
 
@@ -214,10 +245,10 @@ Verified from Cloudflare docs (opened 2026-10-20) and from a live Workers AI cal
 ### Not verified
 
 - **Neither model has an official “AI-text detector” benchmark.** Jev and Clef are general decision models.
-  The default question asks whether a reply is an AI-written “营业式” comment, with true/false criteria
-  for that pattern. The wording, the `ai_generated` question key, and reading `noul` as “AI probability”
-  are **this project's choices**. Accuracy is not a claim from TypeSafe or Cloudflare. The six-reply
-  comparison above is an illustration.
+  Multi mode combines 13 project-written noul questions. Single mode asks whether a reply is an
+  AI-written “营业式” comment. The wording, the question keys, and reading the weighted sum as an
+  “AI” score are **this project's choices**. Accuracy is not a claim from TypeSafe or Cloudflare.
+  The six-reply comparison above is an illustration of an older single-question rubric.
 - This repository’s tests use **mocked** responses in the shape above. No real key or Account ID is in the
   repo, and the tests do not call the network.
 - Third-party “Jev detector” sites are not official and are not used.

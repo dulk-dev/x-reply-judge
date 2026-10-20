@@ -63,10 +63,11 @@ test("invalid triggerMode falls back to auto", async () => {
   assert.equal(settings.triggerMode, "auto");
 });
 
-test("empty storage stays on TypeSafe Jev", async () => {
+test("empty storage stays on TypeSafe Jev and multi-signal mode", async () => {
   stored = {};
   const settings = await loadSettings();
   assert.equal(settings.protocol, "typesafe");
+  assert.equal(settings.judgeMode, "multi");
   assert.equal(settings.model, "jev-latest");
   assert.equal(settings.baseUrl, "https://api.typesafe.ai");
   assert.equal(settings.path, "/v1/systemone");
@@ -128,6 +129,37 @@ test("a custom question is kept and blank criteria use the defaults", async () =
   assert.equal(settings.instructions, "我自己的问法");
   assert.equal(settings.criteriaTrue, JevApi.DEFAULT_API_SETTINGS.criteriaTrue);
   assert.equal(settings.criteriaFalse, "自己的否");
+});
+
+test("saved 0.3.1 criteria upgrade, and a custom side stays", async () => {
+  stored = {
+    settings: {
+      criteriaTrue: JevApi.LEGACY_CRITERIA_TRUE,
+      criteriaFalse: "自己的否"
+    }
+  };
+  const settings = await loadSettings();
+  assert.equal(settings.criteriaTrue, JevApi.DEFAULT_API_SETTINGS.criteriaTrue);
+  assert.equal(settings.criteriaFalse, "自己的否");
+  assert.equal(settings.criteriaTrue.includes("先定性或肯定"), true);
+});
+
+test("saveScores stores a v3 key and drops an entry without one", async () => {
+  stored = {};
+  await saveScores([
+    { key: "v3:m:p:1", probability: 40, tooltip: "r1 先定性再展望 +35" },
+    { probability: 99 }
+  ]);
+  assert.deepEqual(Object.keys(stored.scoreCache), ["v3:m:p:1"]);
+  assert.equal(stored.scoreCache["v3:m:p:1"].probability, 40);
+  assert.equal(stored.scoreCache["v3:m:p:1"].tooltip, "r1 先定性再展望 +35");
+});
+
+test("explicit single mode is kept and anything else becomes multi", async () => {
+  stored = { settings: { judgeMode: " single " } };
+  assert.equal((await loadSettings()).judgeMode, "single");
+  stored = { settings: { judgeMode: "legacy" } };
+  assert.equal((await loadSettings()).judgeMode, "multi");
 });
 
 test("explicit cloudflare settings are kept and the model is normalized", async () => {

@@ -21,12 +21,40 @@ function syncProtocolUi() {
   $("apiKeyLabel").textContent = cloudflare ? "Cloudflare API token" : "TypeSafe API key";
   $("apiKeyHelpTypesafe").hidden = cloudflare;
   $("apiKeyHelpCloudflare").hidden = !cloudflare;
+  syncJudgeUi();
+}
+
+function renderMultiSignals() {
+  const list = $("multiSignalList");
+  list.replaceChildren();
+  for (const row of JevApi.multiSignalRows()) {
+    const item = document.createElement("li");
+    const title = document.createElement("strong");
+    const sign = row.weight > 0 ? `+${row.weight}` : String(row.weight);
+    title.textContent = `${row.key} · ${row.kind === "ai" ? "AI" : "human"} · ${sign}`;
+    const instructions = document.createElement("div");
+    instructions.textContent = row.instructions;
+    const yes = document.createElement("div");
+    yes.textContent = `yes: ${row.criteriaTrue}`;
+    const no = document.createElement("div");
+    no.textContent = `no: ${row.criteriaFalse}`;
+    item.append(title, instructions, yes, no);
+    list.appendChild(item);
+  }
+}
+
+function syncJudgeUi() {
+  const multi = $("judgeMode").value !== "single";
+  $("singleQuestion").hidden = multi;
+  $("multiSignals").hidden = !multi;
+  if (multi) renderMultiSignals();
 }
 
 async function render() {
   const settings = await loadSettings();
   $("apiKey").value = settings.apiKey;
   $("protocol").value = settings.protocol === "cloudflare" ? "cloudflare" : "typesafe";
+  $("judgeMode").value = settings.judgeMode === "single" ? "single" : "multi";
   $("accountId").value = settings.accountId || "";
   $("cfModel").value = JevApi.cloudflareModel(settings.cfModel);
   for (const field of [...API_FIELDS, ...NUMBER_FIELDS]) $(field).value = settings[field];
@@ -45,6 +73,7 @@ function clampInt(value, min, max, fallback) {
 function readForm() {
   const settings = {};
   settings.protocol = selectedProtocol();
+  settings.judgeMode = $("judgeMode").value === "single" ? "single" : "multi";
   settings.accountId = JevApi.normalizeAccountId($("accountId").value);
   settings.cfModel = JevApi.cloudflareModel($("cfModel").value);
   for (const field of API_FIELDS) settings[field] = $(field).value.trim();
@@ -91,6 +120,7 @@ async function save() {
 }
 
 $("protocol").addEventListener("change", syncProtocolUi);
+$("judgeMode").addEventListener("change", syncJudgeUi);
 
 $("save").addEventListener("click", async () => {
   const settings = readForm();

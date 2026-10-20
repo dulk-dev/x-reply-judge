@@ -2,11 +2,12 @@
 
 [English](README.md)
 
-Chrome MV3 扩展。在 X（Twitter）的帖子或回复上显示一枚小徽章：`AI 87%`，表示这段文字被判定为 AI 所写的概率。
-颜色：**>= 70 红色**，**>= 31 橙色**，其余灰色。不显示理由，也不显示信号列表。
+Chrome MV3 扩展。在 X（Twitter）的帖子或回复上显示一枚小徽章：`AI 87%`。
+颜色：**≥ 45 红色**，**20–44 橙色**，**0–19 灰色**。悬停徽章可以看到触发的信号。
 
 默认后端是 TypeSafe **Jev**。可选后端调用 Cloudflare Workers AI 的 **Clef** 或 **Clef-flash**。
-两者都是决策模型：本扩展只问一个是/否问题，并把返回的概率显示出来。
+两者都是决策模型。默认判定方式在一次请求里问 13 道是/否题，再把结果合成一个分数。
+仍可切回单题模式。
 
 每条回复上还有 **Mute** / **Block** 按钮（帖子详情 / 通知）。**只有你点击时才会执行。**
 
@@ -50,9 +51,12 @@ DOM 抓取（`data-testid` 选择器）、缓存 / 自动扫描流程，以及 `
 
 ### 流水线
 
-- 发给 API 的 `state` **只有文本**。不含作者、推文 id、时间戳或原帖。推文 id 只在本地当作缓存键。
+- 在帖子详情页，`state` 是 `原帖：` 加上主帖，空一行，再是 `回复：` 加上这条回复。
+  信息流里的帖子，或主帖没有正文的回复，只发送这段文本本身。
+  不含作者、推文 id 或时间戳。
 - 每条内容一次请求，同时在途最多 N 个（默认 4），每次扫描最多 M 条（默认 30）。
-- 结果按推文 id 缓存在 `chrome.storage.local`，保留 7 天。
+- 结果缓存在 `chrome.storage.local`，保留 7 天。键是 `v3:<m|s>:<p|r>:<推文 id>`：
+  `m`/`s` 表示多信号或单题，`p`/`r` 表示这次有没有带上原帖。
 - 自动扫描关闭或暂停时，只显示已缓存的分数，不再请求 API。
 
 徽章、Mute/Block、扫描、缓存和页面判断对两种后端相同。
@@ -67,12 +71,12 @@ DOM 抓取（`data-testid` 选择器）、缓存 / 自动扫描流程，以及 `
 2. 扩展选项 → Backend 选 **TypeSafe Jev** → 粘贴 key → **Save** → **Test connection**。
 
 默认请求是 `POST https://api.typesafe.ai/v1/systemone`，头为 `Authorization: Bearer <key>`，
-正文为 `{ model: "jev-latest", state, questions: { ai_generated: { type: "noul", instructions, criteria } } }`。
+正文为 `{ model: "jev-latest", state, questions }`。每道题是 `{ type: "noul", instructions, criteria }`。
 `criteria` 是 `{ true, false }`，两边都是字符串。TypeSafe 把这个形状写成可选的
-[noul criteria](https://docs.typesafe.ai/primitives/noul.md)，所以 Jev 和 Clef 收到同一道题。
-分数取 `answers.<key>.noul`。
+[noul criteria](https://docs.typesafe.ai/primitives/noul.md)，所以 Jev 和 Clef 收到同样的题。
+单道题的 noul 在 `answers.<key>.noul`。
 
-**Advanced** 可以改 Base URL、path、认证头、模型名、问题 key、响应字段路径和问题原文。
+**Advanced** 可以改 Base URL、path、认证头、模型名和响应字段路径。单题模式下还可以改那一道题。
 主机不是 `api.typesafe.ai` 时，点击 **Test connection** 会请求可选的主机权限。这里没有单独的 Account ID。
 
 ### Cloudflare Workers AI（Clef）
@@ -97,15 +101,16 @@ DOM 抓取（`data-testid` 选择器）、缓存 / 自动扫描流程，以及 `
 
 - 头：`Authorization: Bearer <token>`，`Content-Type: application/json`
 - 正文与 Jev 同形：`{ model, state, questions }`。`model` 只能是 `clef` 或 `clef-flash`，不会是 `jev-latest`。
-- 分数：`result.answers.<key>.noul`（若响应只有顶层 `answers.<key>.noul` 也能解析）。
+- 每道题的 noul：`result.answers.<key>.noul`（若响应只有顶层 `answers.<key>.noul` 也能解析）。
 
 Account ID 和 token 不会写进扩展的错误文本。失败时只显示 HTTP 状态码，以及 `errors[0].message` 和 `errors[0].code`。
 HTTP 200 且 `"success": false` 也算失败。`429` 和 `5xx` 会按退避重试。实测没有看到 Cloudflare 的限流响应头；
 如果响应里有 `retry-after`，仍然会遵守。
 
 选择该后端时，Base URL、path、认证头、认证方案、Jev 模型名和响应字段路径会隐藏。
-问题 key、问题说明和“是/否” criteria 仍然可编辑，并且两种后端都会发送。某一栏留空就用该栏的默认值。
-已经保存过的旧英文默认问法、且没有 criteria 时，视为没有自定义过，会自动换成现在的默认问题。
+单题模式下，问题 key、问题说明和“是/否” criteria 仍然可编辑，并且两种后端都会发送。某一栏留空就用该栏的默认值。
+已经保存过的旧英文默认问法，或 0.3.1 的默认 criteria，视为没有自定义过，会自动换成现在的默认问题。
+多信号模式不用这些输入框；Advanced 改为只读列出 13 道题，因此这一节不会是空的。
 
 ### clef 与 clef-flash
 
@@ -125,19 +130,41 @@ HTTP 200 且 `"success": false` 也算失败。`429` 和 `5xx` 会按退避重�
 
 ## 为什么默认问题要带 criteria
 
-没有评分标准的是/否问题，对明显的 AI 回复几乎不动。三条读起来就是生成的中文“营业式”回复，在扩展里只有 **6%**、**11%**、**13%**。把同一句英文、不带 criteria 的问法拿到 Clef 上重放，分数停在 **5–16%**。
+没有评分标准的是/否问题，对明显的 AI 回复几乎不动。三条读起来就是生成的中文“营业式”回复，在扩展里只有 **6%**、**11%**、**13%**。把同一句英文、不带 criteria 的问法拿到 Clef 上重放，分数停在 **5–16%**。在 Clef 上，用更窄的 0.3.1 criteria、且不附原帖时，同样这三条是 **83–94%**。三条真人口吻的对照是 **2–39%**。
 
-现在的默认是一道中文 noul 问题，加上 `criteria.true` / `criteria.false`：一边是复述原帖、结构整齐、泛泛地补一句“要是…就更好了”；另一边是像真人随手打的。在 Clef 上，同样这三条是 **83–94%**。三条真人口吻的对照是 **2–39%**。
+单题模式仍然问一道中文 noul 问题，但 criteria 更宽：复述原帖、句子工整、“先定性或肯定，再拆解，最后补一句展望”、中立点评员口吻，对照很短的反应、个人细节、直接纠正或潦草输入。上面这六条分数是用更窄的 0.3.1 标准、在 Clef 上、还没附原帖时测的。它们只是例子，不是基准，也不是多信号分数。
 
-这只是 **六条回复**，用来举例，不是基准。这组 criteria 是按**中文营业式回复**调的，别的写法可能会误判：写得很整齐的真人回复、很短的附和，或者译文。措辞是本项目自己的选择。`state` 仍然只有回复正文。评分标准里提到“原帖”，指的是一种文风；请求里不会附上父帖，模型也不能真的拿回复和原帖对照。
+这组 criteria 是按**中文营业式回复**调的，别的写法可能会误判：写得很整齐的真人回复、很短的附和，或者译文。措辞是本项目自己的选择。
+
+## 多信号判定
+
+选项里的 **判定方式**。**Multi-signal** 是默认。**Single question** 是以前的单题模式。
+
+多信号模式一次请求发送 13 道 noul 题。其中 9 道是 AI 信号，4 道是真人特征。
+分数是 `clamp(Σ 权重 × 概率, 0, 100)`，概率是该题的 noul（0–1）：
+
+| 信号 | 权重 |
+| --- | --- |
+| r1 | +35 |
+| r2、r9 | 各 +30 |
+| r3–r7 | 各 +15 |
+| r8 | +7 |
+| h1 | −30 |
+| h3 | −25 |
+| h4 | −20 |
+| h2 | −15 |
+
+颜色是灰色 **0–19**、橙色 **20–44**、红色 **≥ 45**。徽章的提示列出“是”的概率达到 50% 的信号，以及取整后的贡献。13 道题里只要缺一道答案，这条内容就没有分数，也不会写入缓存。
+
+这些题是固定的。Advanced 只读显示它们（key、说明、是/否 criteria、权重、AI 或真人），内容来自请求所用的同一份常量。切回单题模式后，可编辑的那一道题会重新出现。
 
 ## 隐私
 
-- 请求正文包含帖子或回复的**文本**以及问题。不含作者、推文 id、时间戳或父帖。
+- 请求正文包含帖子或回复的**文本**、帖子详情页上的原帖文本，以及问题。不含作者、推文 id 或时间戳。
 - API key 或 Cloudflare token 只存在本机 `chrome.storage.local`。不会同步，也不会发到所选 API 以外的地方；发送时只放在 `Authorization` 头里。
 - TypeSafe 请求发往所配置的主机，默认是 `https://api.typesafe.ai`，除非你在 **Advanced** 里修改。
 - Cloudflare 请求只发往 `https://api.cloudflare.com`。Account ID 是该主机上的路径段（`/accounts/{id}/ai/run/...`）。它不会被复制到日志或错误文本里。
-- 分数在本地缓存 7 天，键是推文 id。
+- 分数在本地缓存 7 天，键是 `v3:<m|s>:<p|r>:<推文 id>`。
 
 ## 权限
 
@@ -185,9 +212,9 @@ HTTP 200 且 `"success": false` 也算失败。`429` 和 `5xx` 会按退避重�
 
 ### 未验证
 
-- **两个模型都没有官方的“AI 文本检测”基准。** Jev 和 Clef 都是通用决策模型。默认问题问的是这条回复是不是 AI 写的“营业式”评论，并用 true/false criteria 描述这种文风。
-  措辞、问题 key `ai_generated`，以及把 `noul` 当成“AI 概率”，都是**本项目自己的选择**。
-  TypeSafe 和 Cloudflare 都没有为此给出准确率承诺。上面六条回复的对比只是示例。
+- **两个模型都没有官方的“AI 文本检测”基准。** Jev 和 Clef 都是通用决策模型。多信号模式把本项目写的 13 道 noul 题合成一个分数。单题模式问的是这条回复是不是 AI 写的“营业式”评论。
+  措辞、问题 key，以及把加权和当成“AI”分数，都是**本项目自己的选择**。
+  TypeSafe 和 Cloudflare 都没有为此给出准确率承诺。上面六条回复的对比，是更早一版单题标准的示例。
 - 本仓库的测试使用上述形状的 **mock** 响应。仓库里没有真实 key 或 Account ID，测试也不会访问网络。
 - 第三方 “Jev detector” 网站不是官方接口，本项目不使用。
 - `clef-omni`（音频 / 视频）不在范围内。

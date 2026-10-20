@@ -46,18 +46,20 @@ async function configProblem(settings) {
 // - lookup: cache only, never calls the API
 // - auto: feed/status auto-scan when triggerMode is "auto", subject to the daily limit
 // - manual: user clicked the scan button / toolbar icon, no daily limit
-// items: [{ id, text }] - only `text` is ever sent to the API.
+// items: [{ id, text, parent }] - text and, on a post page, the main post text. No author or id.
 async function analyzeItems(items, mode) {
+  const settings = await loadSettings();
   const cache = await loadScoreCache();
   const cached = [];
   const misses = [];
   for (const item of items) {
-    if (cache[item.id]) cached.push({ id: item.id, probability: cache[item.id].probability });
+    const key = JevApi.cacheKey(settings.judgeMode, item.parent, item.id);
+    const hit = cache[key];
+    if (hit) cached.push({ id: item.id, probability: hit.probability, tooltip: hit.tooltip || "" });
     else misses.push(item);
   }
   if (mode === "lookup" || !misses.length) return { ok: true, results: cached, batchIds: [] };
 
-  const settings = await loadSettings();
   let batch = misses.slice(0, settings.maxReplies);
 
   if (mode === "auto") {
@@ -74,15 +76,25 @@ async function analyzeItems(items, mode) {
 
   const batchIds = batch.map((item) => item.id);
   const outcomes = await JevApi.mapWithConcurrency(batch, settings.concurrency, (item) =>
-    JevApi.detectText(item.text, settings.apiKey, settings)
+    JevApi.detectText(item.text, settings.apiKey, settings, { parent: item.parent })
   );
 
   const fresh = [];
   let firstError = null;
   outcomes.forEach((outcome, index) => {
-    if (outcome.ok) fresh.push({ id: batch[index].id, probability: outcome.value.probability });
-    else firstError = firstError || outcome.error;
+    if (!outcome.ok) {
+      firstError = firstError || outcome.error;
+      return;
+    }
+    const item = batch[index];
+    fresh.push({
+      key: JevApi.cacheKey(settings.judgeMode, item.parent, item.id),
+      id: item.id,
+      probability: outcome.value.probability,
+      tooltip: outcome.value.tooltip || ""
+    });
   });
+  // A missing answer throws inside detectText, so that item is absent here and is not cached.
   await saveScores(fresh);
   if (mode === "auto") await addAutoCount(batch.length);
 
@@ -125,7 +137,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === "ANALYZE_ITEMS") {
     const items = (message.items || [])
       .filter((item) => item && item.id && typeof item.text === "string" && item.text.trim())
-      .map((item) => ({ id: String(item.id), text: item.text }));
+      .map((item) => ({
+        id: String(item.id),
+        text: item.text,
+        parent: typeof item.parent === "string" ? item.parent : ""
+      }));
     analyzeItems(items, message.mode || "manual")
       .then(sendResponse)
       .catch((error) => sendResponse({ ok: false, error: error.message || "Analysis failed" }));
