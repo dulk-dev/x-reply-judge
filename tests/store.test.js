@@ -147,12 +147,12 @@ test("saved 0.3.1 criteria upgrade, and a custom side stays", async () => {
 test("saveScores stores a v3 key and drops an entry without one", async () => {
   stored = {};
   await saveScores([
-    { key: "v3:m:p:1", probability: 40, tooltip: "r1 先定性再展望 +35" },
+    { key: "v3:m:p:1", probability: 40, tooltip: "r1_generic 万能回复 +35" },
     { probability: 99 }
   ]);
   assert.deepEqual(Object.keys(stored.scoreCache), ["v3:m:p:1"]);
   assert.equal(stored.scoreCache["v3:m:p:1"].probability, 40);
-  assert.equal(stored.scoreCache["v3:m:p:1"].tooltip, "r1 先定性再展望 +35");
+  assert.equal(stored.scoreCache["v3:m:p:1"].tooltip, "r1_generic 万能回复 +35");
 });
 
 test("explicit single mode is kept and anything else becomes multi", async () => {

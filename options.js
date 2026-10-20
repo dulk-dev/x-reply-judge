@@ -31,7 +31,7 @@ function renderMultiSignals() {
     const item = document.createElement("li");
     const title = document.createElement("strong");
     const sign = row.weight > 0 ? `+${row.weight}` : String(row.weight);
-    title.textContent = `${row.key} · ${row.kind === "ai" ? "AI" : "human"} · ${sign}`;
+    title.textContent = `${row.key} · ${row.name} · ${row.kind === "ai" ? "AI" : "human"} · ${sign}`;
     const instructions = document.createElement("div");
     instructions.textContent = row.instructions;
     const yes = document.createElement("div");

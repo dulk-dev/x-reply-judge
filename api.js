@@ -22,113 +22,65 @@
   // A signal counts as fired when its yes-probability is at least this. The badge tooltip lists those.
   const SIGNAL_FIRE_AT = 0.5;
 
-  // One request, 13 noul questions. AI weights are positive; human traits pull the score down.
-  // r1 +35, r2 +30, r9 +30, r3–r7 +15, r8 +7, h1 −30, h2 −15, h3 −25, h4 −20.
+  // One request, 13 noul questions. Text is the tested build, verbatim.
+  // AI: r1_generic +35, r2_restate +30, r9_commentator +30, r3–r7 +15, r8_bless +7.
+  // Human: h1_experience −30, h2_rough −15, h3_challenge −25, h4_joke −20.
+  const PARENT_TEXT_CAP = 1000;
+  const MULTI_PREFIX_PARENT = "下面是 X（推特）上的一条原帖和一条评论区回复。只判断「回复：」后面的内容。";
+  const MULTI_PREFIX_NO_PARENT = "下面是 X（推特）评论区的一条回复。";
   const MULTI_QUESTIONS = Object.freeze([
-    {
-      key: "r1", weight: 35, kind: "ai", label: "先定性再展望",
-      instructions: "这条回复是不是先给一个定性或肯定，再分析拆解，最后补一句展望、条件或风险？",
-      criteria: {
-        true: "先定性或肯定，中间拆开分析，结尾补展望、条件或风险，读起来像写完的三段评论",
-        false: "没有这种先总后分再收的结构"
-      }
-    },
-    {
-      key: "r2", weight: 30, kind: "ai", label: "复述原帖",
-      instructions: "这条回复是不是主要在复述、总结或换个说法解释原帖内容？",
-      criteria: {
-        true: "主要在重复、概括或换说法解释原帖已经说过的内容，很少加上回复者自己的信息",
-        false: "没有在复述原帖，而是在反应、追问、反驳或讲自己的事"
-      }
-    },
-    {
-      key: "r9", weight: 30, kind: "ai", label: "中立点评",
-      instructions: "这条回复的语气是不是像中立的点评员，而不是当事人在说话？",
-      criteria: {
-        true: "语气平稳、居高临下或置身事外，像在给原帖写一句点评，没有自己的利害",
-        false: "像当事人在说话，有立场、情绪或只对某一个人说"
-      }
-    },
-    {
-      key: "r3", weight: 15, kind: "ai", label: "句子工整",
-      instructions: "这条回复的句子是不是完整、工整，几乎没有口语碎块？",
-      criteria: {
-        true: "句子完整、标点和措辞整齐，读起来像写过一遍",
-        false: "有口语碎片、半句、错字或不整齐的随手输入"
-      }
-    },
-    {
-      key: "r4", weight: 15, kind: "ai", label: "面面俱到",
-      instructions: "这条回复是不是逻辑面面俱到，把几个方面都照顾到了？",
-      criteria: {
-        true: "同时照顾到好处、条件、风险或不同方面，覆盖得很全",
-        false: "只碰一个点，没有把几个方面铺开"
-      }
-    },
-    {
-      key: "r5", weight: 15, kind: "ai", label: "套话收束",
-      instructions: "这条回复有没有“就看…”“有意思的地方是…”“要是…就更…”“确实要…”这类套话收束？",
-      criteria: {
-        true: "用“就看…”“有意思的地方是…”“要是…就更…”“确实要…”或同类句式收尾",
-        false: "没有这类套话收束"
-      }
-    },
-    {
-      key: "r6", weight: 15, kind: "ai", label: "泛泛建议",
-      instructions: "这条回复是不是先泛泛肯定，再补一句放之皆准的建议？",
-      criteria: {
-        true: "先宽泛地肯定或赞同，再加一句谁都能说的建议，没有具体对象",
-        false: "没有这种先夸后建议的搭配，或建议非常具体"
-      }
-    },
-    {
-      key: "r7", weight: 15, kind: "ai", label: "没有个人经历",
-      instructions: "这条回复是不是没有自己的具体经历、独家信息或明确情绪？",
-      criteria: {
-        true: "看不出回复者自己做过什么、知道什么独家信息，也没有明确情绪",
-        false: "有具体经历、独家信息或明确情绪"
-      }
-    },
-    {
-      key: "r8", weight: 7, kind: "ai", label: "旧式排版",
-      instructions: "这条回复有没有箭头链路、引号金句或破折号这种整齐的排版套路？",
-      criteria: {
-        true: "使用箭头链路、引号包住的金句，或用破折号铺开结构",
-        false: "没有这些排版套路"
-      }
-    },
-    {
-      key: "h1", weight: -30, kind: "human", label: "随口反应",
-      instructions: "这条回复是不是很短的随口反应、玩笑、梗或感叹？",
-      criteria: {
-        true: "很短，像随口接一句、开玩笑、玩梗或感叹",
-        false: "不是这种短反应，而是成段的说明或点评"
-      }
-    },
-    {
-      key: "h2", weight: -15, kind: "human", label: "口语碎片",
-      instructions: "这条回复有没有口语碎片、不完整的句子或错字？",
-      criteria: {
-        true: "有口语碎片、写一半的句子或明显错字",
-        false: "句子完整，看不出随手打错"
-      }
-    },
-    {
-      key: "h3", weight: -25, kind: "human", label: "亲身经历",
-      instructions: "这条回复有没有讲自己亲身做过的具体事，或只有自己知道的信息？",
-      criteria: {
-        true: "讲了自己做过的具体事，或给出了独家信息",
-        false: "没有亲身经历，也没有独家信息"
-      }
-    },
-    {
-      key: "h4", weight: -20, kind: "human", label: "直接反驳",
-      instructions: "这条回复是不是在直接反驳或纠正原帖？",
-      criteria: {
-        true: "直接反驳、纠正或指出原帖哪里不对",
-        false: "没有直接反驳或纠正"
-      }
-    }
+    { key: "r1_generic", name: "万能回复", weight: 35,
+      instructions: "这条回复是不是放到任何一条推文下面都成立的万能回复？中英文都算。",
+      criteria: { true: "泛泛夸奖、附和或客套（如「说得太对了」「很有价值」「Great insight!」「Huge win!」「Love this!」），没有接住原帖里的任何具体细节，也没有补充自己的内容；换一条推文照样能用",
+        false: "提到了原帖里的具体对象、数字或细节，或补充了自己的信息、问题、经历；离开这条原帖就说不通" } },
+    { key: "r2_restate", name: "复述原帖", weight: 30,
+      instructions: "这条回复是不是主要在把原帖内容换个说法复述、总结或解读一遍，没有新增信息？",
+      criteria: { true: "回复里的要点基本都来自原帖，只是重新组织、概括、提炼或加上评价词（如「最省心的是…」「这条链路很稳」），没有原帖之外的事实、经历、数据、反例或具体问题",
+        false: "回复带来了原帖里没有的新东西：自己的经历、数据、工具名、踩过的坑、反例、纠正或具体追问。即使开头先认同原帖，只要后面有实质新增内容就算 false" } },
+    { key: "r9_commentator", name: "点评员腔", weight: 30,
+      instructions: "这条回复是不是像一个中立的点评员在给原帖做分析总结（营业式评论）？",
+      criteria: { true: "先肯定或定性原帖（如「这思路很聪明」「这套很成熟」「这条链路很稳」），再把原帖内容拆开分析一遍，最后补一句展望、条件或风险（如「就看…」「要是…就更…」「后续再…会更…」）；面面俱到，像在替作者写总结",
+        false: "随口的反应、个人经历、具体追问、反驳纠正、玩笑；或者只针对一个具体点说了自己的看法，不是在系统点评原帖" } },
+    { key: "r3_structure", name: "结构过整", weight: 15,
+      instructions: "这条回复的结构是不是过于工整，像精心组织的点评稿？",
+      criteria: { true: "短短一条回复也有明显的总分总、并列排比或对仗、四字词堆叠、分号分层、箭头链路，句长均匀、标点规范",
+        false: "句子随口、长短不一，有口语停顿、碎片句、语气词，或者只是一两句自然的话" } },
+    { key: "r4_flip", name: "不是…而是", weight: 15,
+      instructions: "这条回复里有没有「不是 X，而是 Y」式的翻转句？",
+      criteria: { true: "包含「不是 X，而是 Y」「从来不是…而是…」「与其说…不如说…」「It's not X, it's Y」「This isn't just about X — it's about Y」这类先否定再拔高的句式",
+        false: "没有这类句式；普通的否定或纠正事实（如「不用装这个，直接那样就行」）不算" } },
+    { key: "r5_elevate", name: "金句拔高", weight: 15,
+      instructions: "这条回复是不是用金句收尾，或者把具体问题拔高到宏大层面？",
+      criteria: { true: "结尾一句漂亮的总结、金句或口号，或者拔高到「本质上」「归根结底」「这才是…」「长期主义」「未来每个人都…」「The future of…」",
+        false: "结尾停在具体的事、问题或个人感受上，没有拔高或总结陈词" } },
+    { key: "r6_engage", name: "求互动", weight: 15,
+      instructions: "这条回复结尾是不是为了互动而抛问题、求回复？",
+      criteria: { true: "结尾抛出一个为了互动而问的问题，或邀请大家交流（如「你怎么看？」「大家都用什么工具？」「What's your strategy?」「欢迎交流」），尤其是在一段夸奖或总结之后顺带一问",
+        false: "没有提问；或者整条回复本身就是一个具体的疑问或求助（如「这个数怎么定的？」「图片丢了怎么办？」）" } },
+    { key: "r7_cliche", name: "套话腔", weight: 15,
+      instructions: "这条回复是不是用了书面套话、营销腔或翻译腔？中英文都算。",
+      criteria: { true: "使用「值得注意的是」「非常有价值」「大大提升」「赋能」「不可或缺」「各司其职」等书面套话，或 game-changer / massive win / truly the key / Absolutely / brilliant / such a valuable 这类英文营业腔",
+        false: "用词口语、具体，像日常聊天；技术名词和行话不算套话" } },
+    { key: "r8_bless", name: "祝福吹捧/emoji", weight: 7,
+      instructions: "这条回复是不是带祝福吹捧，或者 emoji 过量？",
+      criteria: { true: "带「加油」「祝…」「满分」「你值得」之类祝福吹捧，或几乎每句都配 emoji（🚀💡👍🎉🙌）",
+        false: "没有祝福吹捧；最多一个表达情绪的 emoji" } },
+    { key: "h1_experience", name: "亲身经历", weight: -30,
+      instructions: "这条回复里有没有作者自己的亲身经历或独家信息？",
+      criteria: { true: "讲了自己亲身做过、遇到过的具体事（如「我上周试了…」「我之前用过…结果…」），或给出原帖没有提到的具体数字、工具、版本、踩坑细节",
+        false: "没有个人经历或独家信息，只是评价、概括原帖或泛泛建议" } },
+    { key: "h2_rough", name: "口语毛边", weight: -15,
+      instructions: "这条回复有没有明显的口语毛边？",
+      criteria: { true: "至少有一处明确的毛边：语气词（哈哈、啊、吧、呢、嘛）、重复标点（。。、！！）、错别字、网络梗、明显不完整的碎片句",
+        false: "没有上述毛边；用词口语但句子完整通顺也算 false" } },
+    { key: "h3_challenge", name: "具体追问/质疑", weight: -25,
+      instructions: "这条回复有没有针对原帖某个具体细节追问、质疑、反驳或补充不同情况？",
+      criteria: { true: "针对原帖的某个具体点提出真实疑问、质疑、反驳、纠正，或指出原帖没考虑到的例外和坑",
+        false: "完全顺着原帖说，没有针对具体细节的疑问或不同意见" } },
+    { key: "h4_joke", name: "玩笑/情绪", weight: -20,
+      instructions: "这条回复是不是玩笑、吐槽、梗，或带明显的个人情绪？",
+      criteria: { true: "玩笑、吐槽、梗、调侃、感叹，或带明显的个人情绪（好笑、无奈、羡慕、崩溃）",
+        false: "语气平稳中立，像在点评，没有玩笑或个人情绪" } }
   ]);
 
   const DEFAULT_API_SETTINGS = Object.freeze({
@@ -173,19 +125,30 @@
     return cfg?.judgeMode !== "single";
   }
 
-  // With a parent post: `原帖：…\n\n回复：…`. Without one, the reply (or feed post) text alone.
+  // Trimmed parent text, at most 1000 characters. Empty means no parent was sent.
+  function parentText(parent) {
+    return String(parent ?? "").trim().slice(0, PARENT_TEXT_CAP);
+  }
+
+  // With a parent: `原帖：<parent>\n\n回复：<text>`. Without one: `回复：<text>`.
   function formatJudgeState(reply, parent) {
-    const post = String(parent ?? "").trim();
+    const post = parentText(parent);
     const text = String(reply ?? "");
-    if (!post) return text;
+    if (!post) return `回复：${text}`;
     return `原帖：${post}\n\n回复：${text}`;
   }
 
   // v3:<m|s>:<p|r>:<id>. m/s is the judge mode. p means parent text was included, r means it was not.
   function cacheKey(judgeMode, parent, id) {
     const mode = judgeMode === "single" ? "s" : "m";
-    const ctx = String(parent ?? "").trim() ? "p" : "r";
+    const ctx = parentText(parent) ? "p" : "r";
     return `v3:${mode}:${ctx}:${String(id)}`;
+  }
+
+  // Sent instructions are the parent or no-parent prefix plus that signal's own instructions.
+  function signalInstructions(signal, parent) {
+    const prefix = parentText(parent) ? MULTI_PREFIX_PARENT : MULTI_PREFIX_NO_PARENT;
+    return prefix + signal.instructions;
   }
 
   function bandForScore(score) {
@@ -199,7 +162,7 @@
     return fired.map((signal) => {
       const contrib = Math.round(signal.weight * signal.p);
       const signed = contrib > 0 ? `+${contrib}` : String(contrib);
-      return `${signal.key} ${signal.label} ${signed}`;
+      return `${signal.key} ${signal.name} ${signed}`;
     }).join("\n");
   }
 
@@ -207,11 +170,12 @@
   function multiSignalRows(questions = MULTI_QUESTIONS) {
     return questions.map((q) => ({
       key: q.key,
+      name: q.name,
       instructions: q.instructions,
       criteriaTrue: q.criteria.true,
       criteriaFalse: q.criteria.false,
       weight: q.weight,
-      kind: q.kind
+      kind: q.weight < 0 ? "human" : "ai"
     }));
   }
 
@@ -236,7 +200,7 @@
     return cloudflareModel(preferred);
   }
 
-  // state is the reply text, or `原帖：…\n\n回复：…` when a parent post is available.
+  // state is `回复：<text>`, or `原帖：<parent>\n\n回复：<text>` when a parent post is available.
   // No author, ids or timestamps. Multi mode sends the 13 fixed questions; single mode sends one.
   function buildRequestBody(text, cfg, parent) {
     const state = formatJudgeState(text, parent);
@@ -246,7 +210,7 @@
       for (const q of MULTI_QUESTIONS) {
         questions[q.key] = {
           type: "noul",
-          instructions: q.instructions,
+          instructions: signalInstructions(q, parent),
           criteria: { true: q.criteria.true, false: q.criteria.false }
         };
       }
@@ -344,7 +308,7 @@
       if (p == null) throw new Error(`Response is missing noul for "${q.key}"`);
       sum += q.weight * p;
       if (p >= SIGNAL_FIRE_AT) {
-        fired.push({ key: q.key, label: q.label, weight: q.weight, p, kind: q.kind });
+        fired.push({ key: q.key, name: q.name, weight: q.weight, p, kind: q.weight < 0 ? "human" : "ai" });
       }
     }
     const score = Math.min(100, Math.max(0, Math.round(sum)));
@@ -512,6 +476,7 @@
   const api = {
     DEFAULT_API_SETTINGS, LEGACY_DEFAULT_INSTRUCTIONS, LEGACY_CRITERIA_TRUE, LEGACY_CRITERIA_FALSE,
     CF_API_ORIGIN, CF_HOST_PERMISSION, CF_DEFAULT_MODEL, MULTI_QUESTIONS, SIGNAL_FIRE_AT,
+    MULTI_PREFIX_PARENT, MULTI_PREFIX_NO_PARENT, PARENT_TEXT_CAP,
     resolveInstructions, resolveCriteriaSide, cloudflareModel, normalizeAccountId, buildCloudflareRunUrl, requestUrl,
     formatJudgeState, cacheKey, bandForScore, multiSignalRows, scoreMulti,
     buildRequestBody, buildHeaders, buildUrl, getPath,

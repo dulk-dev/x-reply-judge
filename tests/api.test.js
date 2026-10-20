@@ -51,7 +51,7 @@ test("rejects missing, non-numeric and out-of-range values", () => {
 test("request contains ONLY the reply text as state", () => {
   const body = api.buildRequestBody("Great point!", cfg);
   assert.deepEqual(Object.keys(body).sort(), ["model", "questions", "state"]);
-  assert.equal(body.state, "Great point!");
+  assert.equal(body.state, "回复：Great point!");
   assert.equal(body.questions.ai_generated.type, "noul");
   assert.equal(body.questions.ai_generated.instructions, api.DEFAULT_API_SETTINGS.instructions);
   assert.deepEqual(body.questions.ai_generated.criteria, {
@@ -76,7 +76,7 @@ test("detectText end-to-end with mocked fetch", async () => {
   assert.equal(result.probability, 87);
   assert.equal(captured.url, "https://api.typesafe.ai/v1/systemone");
   assert.equal(captured.init.headers.Authorization, "Bearer test-key");
-  assert.equal(JSON.parse(captured.init.body).state, "hello there");
+  assert.equal(JSON.parse(captured.init.body).state, "回复：hello there");
 });
 
 test("retries 429 honoring retry-after, then succeeds", async () => {
@@ -159,7 +159,7 @@ test("custom question text overrides the default criteria", () => {
   };
   for (const protocol of ["typesafe", "cloudflare"]) {
     const body = api.buildRequestBody("只是回复正文", { ...custom, protocol });
-    assert.equal(body.state, "只是回复正文");
+    assert.equal(body.state, "回复：只是回复正文");
     assert.equal(body.questions.ai_generated.instructions, "完全是另一句问法？");
     assert.deepEqual(body.questions.ai_generated.criteria, { true: "像模板", false: "像闲聊" });
   }
@@ -249,7 +249,7 @@ test("Cloudflare request uses clef model, Bearer auth, and the run URL", () => {
   const body = api.buildRequestBody("Great point!", { ...cfCfg, model: "jev-latest", cfModel: "clef" });
   assert.deepEqual(Object.keys(body).sort(), ["model", "questions", "state"]);
   assert.equal(body.model, "clef");
-  assert.equal(body.state, "Great point!");
+  assert.equal(body.state, "回复：Great point!");
   assert.equal(body.questions.ai_generated.type, "noul");
   assert.deepEqual(body.questions.ai_generated.criteria, {
     true: api.DEFAULT_API_SETTINGS.criteriaTrue,
@@ -298,7 +298,7 @@ test("detectText calls the Cloudflare run URL and reads result.model", async () 
   assert.equal(captured.init.headers.Authorization, `Bearer ${TOKEN}`);
   const body = JSON.parse(captured.init.body);
   assert.equal(body.model, "clef-flash");
-  assert.equal(body.state, "hello there");
+  assert.equal(body.state, "回复：hello there");
   assert.equal(body.model === "jev-latest", false);
 });
 

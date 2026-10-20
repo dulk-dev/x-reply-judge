@@ -26,7 +26,7 @@
 </head>
 <body>
   <h1>X Reply Judge</h1>
-  <p class="note">Shows an AI-text score on feed posts and replies. On a post page the main post is sent with each reply as <code>原帖</code> / <code>回复</code>. Feed posts send that post’s text only. No author or tweet id is sent.</p>
+  <p class="note">Shows an AI-text score on feed posts and replies. On a post page the main post (at most 1000 characters) is sent with each reply as <code>原帖</code> / <code>回复</code>. Without a main post the text is sent as <code>回复：</code> plus that text. No author or tweet id is sent.</p>
 
   <label for="protocol">Backend</label>
   <select id="protocol">

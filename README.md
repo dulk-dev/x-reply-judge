@@ -56,8 +56,8 @@ Manual scan always works in both modes.
 
 ### Pipeline
 
-- On a post page, `state` is `原帖：` plus the main post, a blank line, then `回复：` plus the reply.
-  A feed post, or a reply whose main post has no text, sends that text alone.
+- On a post page, `state` is `原帖：` plus the main post (at most 1000 characters), a blank line, then `回复：` plus the reply.
+  A feed post, or a reply whose main post has no text, is `回复：` plus that text.
   No author, tweet id, or timestamps.
 - One request per item, at most N in flight (default 4), at most M items per scan (default 30).
 - Results are cached in `chrome.storage.local` for 7 days. The key is
@@ -162,19 +162,20 @@ reply, a short agreement, or a translation. The wording is this project's choice
 Options → **判定方式**. **Multi-signal** is the default. **Single question** is the previous mode.
 
 Multi mode sends 13 noul questions in one request. Nine are AI signals and four are human traits.
-The score is `clamp(Σ weight × probability, 0, 100)`, where probability is that question’s noul
-(0–1):
+Each question’s instructions are a short prefix plus that signal’s text: the parent prefix when the
+main post is included, otherwise the no-parent prefix. The score is `clamp(Σ weight × probability, 0, 100)`,
+where probability is that question’s noul (0–1):
 
 | Signals | Weight |
 | --- | --- |
-| r1 | +35 |
-| r2, r9 | +30 each |
-| r3–r7 | +15 each |
-| r8 | +7 |
-| h1 | −30 |
-| h3 | −25 |
-| h4 | −20 |
-| h2 | −15 |
+| r1_generic 万能回复 | +35 |
+| r2_restate 复述原帖, r9_commentator 点评员腔 | +30 each |
+| r3_structure 结构过整, r4_flip 不是…而是, r5_elevate 金句拔高, r6_engage 求互动, r7_cliche 套话腔 | +15 each |
+| r8_bless 祝福吹捧/emoji | +7 |
+| h1_experience 亲身经历 | −30 |
+| h3_challenge 具体追问/质疑 | −25 |
+| h4_joke 玩笑/情绪 | −20 |
+| h2_rough 口语毛边 | −15 |
 
 Colors are gray **0–19**, orange **20–44**, red **≥ 45**. The badge tooltip lists signals whose
 yes-probability is at least 50%, with the rounded contribution. If any of the 13 answers is missing,
