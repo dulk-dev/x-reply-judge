@@ -22,19 +22,22 @@
 </head>
 <body>
   <h1>X Reply Judge (Jev)</h1>
-  <p class="note">Shows a TypeSafe Jev probability that each X reply is AI-written. Only the reply text is sent to the API.</p>
+  <p class="note">Shows a TypeSafe Jev probability that feed posts and replies are AI-written. Only the text is sent to the API.</p>
 
   <label for="apiKey">TypeSafe API key</label>
   <input id="apiKey" type="password" autocomplete="off" placeholder="Paste your key">
   <small>Stored only in chrome.storage.local on this device. Create one at <a href="https://console.typesafe.ai" target="_blank" rel="noreferrer">console.typesafe.ai</a>.</small>
 
   <h2>Scanning</h2>
+  <label>Trigger mode</label>
+  <label class="inline"><input id="triggerModeAuto" name="triggerMode" type="radio" value="auto"> Auto — scan the home feed and post detail pages when you open them</label>
+  <label class="inline"><input id="triggerModeManual" name="triggerMode" type="radio" value="manual"> Manual — only when you click Scan or the toolbar icon</label>
+  <small>Manual scan always stays available (floating button + toolbar icon), even in Auto mode.</small>
   <label for="concurrency">Concurrent requests</label>
   <input id="concurrency" type="number" min="1" max="16">
-  <label for="maxReplies">Max replies per scan</label>
+  <label for="maxReplies">Max items per scan</label>
   <input id="maxReplies" type="number" min="1" max="200">
-  <label class="inline"><input id="autoScanOwn" type="checkbox"> Auto-scan replies under my own posts</label>
-  <label for="dailyAutoLimit">Daily auto-scan limit (replies)</label>
+  <label for="dailyAutoLimit">Daily auto-scan limit (items)</label>
   <input id="dailyAutoLimit" type="number" min="0" max="10000">
   <small id="autoUsage"></small>
 

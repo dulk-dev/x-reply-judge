@@ -10,14 +10,23 @@ const DEFAULT_SETTINGS = Object.freeze({
   ...JevApi.DEFAULT_API_SETTINGS,
   concurrency: 4,
   maxReplies: 30,
-  autoScanOwn: false,
+  // "auto" = scan feed posts and status-page replies on arrival; "manual" = click only.
+  triggerMode: "auto",
   dailyAutoLimit: 100
 });
 
 async function loadSettings() {
   const { [SETTINGS_KEY]: saved = {}, [API_KEY_KEY]: apiKey = "" } =
     await chrome.storage.local.get([SETTINGS_KEY, API_KEY_KEY]);
-  return { ...DEFAULT_SETTINGS, ...saved, apiKey };
+  const merged = { ...DEFAULT_SETTINGS, ...saved, apiKey };
+  // Migrate the old "auto-scan own posts only" toggle into triggerMode.
+  if (saved.triggerMode == null && typeof saved.autoScanOwn === "boolean") {
+    merged.triggerMode = saved.autoScanOwn ? "auto" : "manual";
+  }
+  if (merged.triggerMode !== "auto" && merged.triggerMode !== "manual") {
+    merged.triggerMode = DEFAULT_SETTINGS.triggerMode;
+  }
+  return merged;
 }
 
 function todayKey(now = new Date()) {

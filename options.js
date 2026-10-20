@@ -12,8 +12,10 @@ async function render() {
   const settings = await loadSettings();
   $("apiKey").value = settings.apiKey;
   for (const field of [...API_FIELDS, ...NUMBER_FIELDS]) $(field).value = settings[field];
-  $("autoScanOwn").checked = settings.autoScanOwn;
-  $("autoUsage").textContent = `Used today: ${await todayAutoCount()}`;
+  const mode = settings.triggerMode === "manual" ? "manual" : "auto";
+  $("triggerModeAuto").checked = mode === "auto";
+  $("triggerModeManual").checked = mode === "manual";
+  $("autoUsage").textContent = `Auto-scan used today: ${await todayAutoCount()}`;
 }
 
 function clampInt(value, min, max, fallback) {
@@ -30,7 +32,7 @@ function readForm() {
   settings.concurrency = clampInt($("concurrency").value, 1, 16, DEFAULT_SETTINGS.concurrency);
   settings.maxReplies = clampInt($("maxReplies").value, 1, 200, DEFAULT_SETTINGS.maxReplies);
   settings.dailyAutoLimit = clampInt($("dailyAutoLimit").value, 0, 10000, DEFAULT_SETTINGS.dailyAutoLimit);
-  settings.autoScanOwn = $("autoScanOwn").checked;
+  settings.triggerMode = $("triggerModeManual").checked ? "manual" : "auto";
   return settings;
 }
 
