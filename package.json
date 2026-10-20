@@ -1,0 +1,10 @@
+{
+  "name": "x-reply-judge-jev",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "check": "for f in *.js tests/*.js; do node --check \"$f\" || exit 1; done && node -e \"JSON.parse(require('fs').readFileSync('manifest.json','utf8'))\"",
+    "test": "node --test tests/*.test.js"
+  }
+}
