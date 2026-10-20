@@ -90,7 +90,7 @@
         const text = articleText(article);
         if (!id || !text) continue;
         if (author && ownHandle && author === ownHandle) continue;
-        items.push({ id, text });
+        items.push({ id, text, parent: "" });
       }
       return { kind, items, noun: "post" };
     }
@@ -101,6 +101,7 @@
     const mainArticle = findMainArticle(articles, mainId);
     if (!mainArticle) return null;
 
+    const parent = articleText(mainArticle);
     const items = [];
     for (const article of articles) {
       if (article === mainArticle) continue;
@@ -109,7 +110,7 @@
       const author = articleAuthorHandle(article);
       const text = articleText(article);
       if (!id || !author || !text || author === ownHandle) continue;
-      items.push({ id, text });
+      items.push({ id, text, parent });
     }
     return { kind, items, noun: "reply" };
   }
@@ -130,10 +131,10 @@
     setTimeout(() => toast.remove(), 3200);
   }
 
-  // >=70 red, >=31 orange, otherwise gray.
+  // gray 0–19, orange 20–44, red ≥45.
   function badgeColors(probability) {
-    if (probability >= 70) return { color: "rgb(244, 33, 46)", background: "rgba(244, 33, 46, .12)" };
-    if (probability >= 31) return { color: "rgb(214, 128, 0)", background: "rgba(255, 173, 31, .16)" };
+    if (probability >= 45) return { color: "rgb(244, 33, 46)", background: "rgba(244, 33, 46, .12)" };
+    if (probability >= 20) return { color: "rgb(214, 128, 0)", background: "rgba(255, 173, 31, .16)" };
     return { color: "rgb(113, 118, 123)", background: "rgba(113, 118, 123, .1)" };
   }
 
@@ -153,10 +154,12 @@
     }
     if (state === "pending") {
       badge.textContent = "…";
+      badge.title = "";
       Object.assign(badge.style, badgeColors(0));
       return;
     }
     badge.textContent = `${state.probability}%`;
+    badge.title = state.tooltip || "";
     Object.assign(badge.style, badgeColors(state.probability));
   }
 
@@ -214,13 +217,15 @@
       try {
         response = await sendToBackground({
           type: "ANALYZE_ITEMS",
-          items: items.map(({ id, text }) => ({ id, text })),
+          items: items.map(({ id, text, parent }) => ({ id, text, parent: parent || "" })),
           mode
         });
       } catch (_error) {
         response = { ok: false, error: "Extension was updated. Please reload the page.", results: [], batchIds: [] };
       }
-      for (const result of response?.results || []) scores.set(result.id, { probability: result.probability });
+      for (const result of response?.results || []) {
+        scores.set(result.id, { probability: result.probability, tooltip: result.tooltip || "" });
+      }
       if (mode === "lookup") items.forEach((item) => lookedUp.add(item.id));
       for (const id of response?.batchIds || []) autoAttempts.set(id, (autoAttempts.get(id) || 0) + 1);
       renderScoredBadges(true);
@@ -392,6 +397,11 @@
     if (area !== "local") return;
     const dataKeys = ["scoreCache", "autoUsage"];
     if (changes.scoreCache && !changes.scoreCache.newValue) {
+      scores.clear();
+      lookedUp.clear();
+      document.querySelectorAll(`[${BADGE_ATTRIBUTE}]`).forEach((badge) => badge.remove());
+    }
+    if (changes.settings) {
       scores.clear();
       lookedUp.clear();
       document.querySelectorAll(`[${BADGE_ATTRIBUTE}]`).forEach((badge) => badge.remove());

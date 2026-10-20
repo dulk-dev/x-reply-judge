@@ -24,3 +24,6 @@ SOFTWARE.
 
 Modifications (TypeSafe Jev integration, English UI) Copyright (c) 2026 Marvin Chang,
 released under the same MIT License above.
+
+Further modifications (optional Cloudflare Workers AI Clef backend) Copyright (c) 2026 Chaochun,
+released under the same MIT License above.

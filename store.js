@@ -1,4 +1,4 @@
-// Local storage: settings, per-reply probability cache (keyed by tweet id, 7 days), daily auto-scan counter.
+// Local storage: settings, score cache (v3:<m|s>:<p|r>:<tweet id>, 7 days), daily auto-scan counter.
 
 const SETTINGS_KEY = "settings";
 const API_KEY_KEY = "apiKey";
@@ -26,6 +26,22 @@ async function loadSettings() {
   if (merged.triggerMode !== "auto" && merged.triggerMode !== "manual") {
     merged.triggerMode = DEFAULT_SETTINGS.triggerMode;
   }
+  // Upgrades that predate the backend picker have no protocol. Keep them on TypeSafe Jev.
+  merged.protocol = String(merged.protocol || "").trim().toLowerCase();
+  if (merged.protocol !== "typesafe" && merged.protocol !== "cloudflare") {
+    merged.protocol = "typesafe";
+  }
+  merged.cfModel = JevApi.cloudflareModel(merged.cfModel);
+  merged.accountId = JevApi.normalizeAccountId(merged.accountId);
+  merged.judgeMode = String(merged.judgeMode || "").trim().toLowerCase() === "single" ? "single" : "multi";
+  // The old English default counts as unset, so upgrades pick up the criteria-backed question.
+  merged.instructions = JevApi.resolveInstructions(merged.instructions);
+  merged.criteriaTrue = JevApi.resolveCriteriaSide(
+    merged.criteriaTrue, JevApi.LEGACY_CRITERIA_TRUE, DEFAULT_SETTINGS.criteriaTrue
+  );
+  merged.criteriaFalse = JevApi.resolveCriteriaSide(
+    merged.criteriaFalse, JevApi.LEGACY_CRITERIA_FALSE, DEFAULT_SETTINGS.criteriaFalse
+  );
   return merged;
 }
 
@@ -35,7 +51,7 @@ function todayKey(now = new Date()) {
   return `${now.getFullYear()}-${month}-${day}`;
 }
 
-// Non-expired cache: tweet id -> { probability, savedAt }.
+// Non-expired cache. Keys are v3:<m|s>:<p|r>:<tweet id> → { probability, tooltip, savedAt }.
 async function loadScoreCache() {
   const { [SCORE_CACHE_KEY]: cache = {} } = await chrome.storage.local.get(SCORE_CACHE_KEY);
   const now = Date.now();
@@ -48,7 +64,10 @@ async function saveScores(results) {
   if (!results.length) return;
   const cache = await loadScoreCache();
   const savedAt = Date.now();
-  for (const { id, probability } of results) cache[id] = { probability, savedAt };
+  for (const { key, probability, tooltip } of results) {
+    if (!key) continue;
+    cache[key] = { probability, tooltip: tooltip || "", savedAt };
+  }
   await chrome.storage.local.set({ [SCORE_CACHE_KEY]: cache });
 }
 
