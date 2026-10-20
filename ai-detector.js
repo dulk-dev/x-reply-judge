@@ -129,11 +129,11 @@
       actionGroup.appendChild(badge);
     }
     if (state === "pending") {
-      badge.textContent = "AI …";
+      badge.textContent = "…";
       Object.assign(badge.style, badgeColors(0));
       return;
     }
-    badge.textContent = `AI ${state.probability}%`;
+    badge.textContent = `${state.probability}%`;
     Object.assign(badge.style, badgeColors(state.probability));
   }
 
